@@ -83,12 +83,14 @@ def get_permanent_keyboard():
 
 # --- CORE HANDLERS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message: return # Safety check
+    if not update.message:
+        return
     
     user = update.effective_user
     user_id = user.id
     init_db()
 
+    # ================= REFERRAL SYSTEM SAME =================
     args = context.args
     conn = get_db_connection()
     c = conn.cursor()
@@ -97,30 +99,77 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ref_id = int(args[0]) if args and args[0].isdigit() and int(args[0]) != user_id else None
         if ref_id:
             update_balance(ref_id, 20)
-            try: await context.bot.send_message(chat_id=ref_id, text="🎁 **Referral Bonus!** +20 Coins mile.")
-            except: pass
-        c.execute("INSERT INTO users (user_id, balance, referred_by) VALUES (?, ?, ?)", (user_id, 20, ref_id))
+            try:
+                await context.bot.send_message(
+                    chat_id=ref_id,
+                    text="🎁 **Referral Bonus!** +20 Coins mile.",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+        c.execute(
+            "INSERT INTO users (user_id, balance, referred_by) VALUES (?, ?, ?)",
+            (user_id, 20, ref_id)
+        )
         conn.commit()
     conn.close()
+    # =========================================================
 
     if not await is_subscribed(context.bot, user_id):
-        # ERROR FIX: Added try-except for Forbidden (Blocked user)
         try:
-            await update.message.reply_text("❌ **Access Denied!** Join channels first.", reply_markup=get_join_markup())
+            await update.message.reply_text(
+                "❌ **Access Denied!** Join channels first.",
+                reply_markup=get_join_markup(),
+                parse_mode="Markdown"
+            )
         except Forbidden:
             pass
         return
 
-    welcome_text = f"👋 **Hello, {user.first_name}!**\n💰 Your Balance: `{get_user_data(user_id)}`"
+    balance = get_user_data(user_id)
+
+    full_name = user.full_name
+    username = f"@{user.username}" if user.username else "No Username"
+
+    premium_text = f"""
+╔══════════════════════╗
+       👑 𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗗𝗔𝗦𝗛𝗕𝗢𝗔𝗥𝗗
+╚══════════════════════╝
+
+👤 𝗡𝗔𝗠𝗘 ➜ {full_name}
+🆔 𝗨𝗦𝗘𝗥 ➜ {username}
+🪪 𝗜𝗗 ➜ {user_id}
+
+💰 𝗖𝗢𝗜𝗡𝗦 ➜ {balance}
+
+━━━━━━━━━━━━━━━━━━━━━━
+🔥 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗞𝗔𝗠𝗢𝗗 𝗚𝗘𝗡𝗘𝗥𝗔𝗧𝗢𝗥
+━━━━━━━━━━━━━━━━━━━━━━
+"""
+
     try:
         photos = await user.get_profile_photos()
+
         if photos.total_count > 0:
-            await update.message.reply_photo(photo=photos.photos[0][0].file_id, caption=welcome_text, reply_markup=get_permanent_keyboard(), parse_mode="Markdown")
+            await update.message.reply_photo(
+                photo=photos.photos[0][0].file_id,
+                caption=premium_text,
+                reply_markup=get_permanent_keyboard(),
+                parse_mode="Markdown"
+            )
         else:
-            await update.message.reply_text(welcome_text, reply_markup=get_permanent_keyboard(), parse_mode="Markdown")
+            await update.message.reply_text(
+                premium_text,
+                reply_markup=get_permanent_keyboard(),
+                parse_mode="Markdown"
+            )
+
     except (Forbidden, Exception):
-        try: await update.message.reply_text(welcome_text, reply_markup=get_permanent_keyboard(), parse_mode="Markdown")
-        except: pass
+        await update.message.reply_text(
+            premium_text,
+            reply_markup=get_permanent_keyboard(),
+            parse_mode="Markdown"
+        )
 
 async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -135,7 +184,6 @@ async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ Abhi bhi join nahi kiya!", show_alert=True)
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ERROR FIX: Added safety check for update.message
     if not update.message or not update.message.text:
         return 
         
@@ -146,102 +194,139 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if get_user_data(user_id) <= 0:
             await update.message.reply_text("❌ Low Balance!")
             return ConversationHandler.END
-        await update.message.reply_text("🌍 **Region? (IND, BRA, ID):**")
+
+        keyboard = [
+            [InlineKeyboardButton("🇮🇳 INDIA (IND)", callback_data="reg_IND")],
+            [InlineKeyboardButton("🇧🇷 BRAZIL (BRA)", callback_data="reg_BRA")],
+            [InlineKeyboardButton("🇮🇩 INDONESIA (ID)", callback_data="reg_ID")]
+        ]
+
+        await update.message.reply_text(
+            "╔══════════════════════╗\n"
+            "     🌍 SELECT REGION\n"
+            "╚══════════════════════╝",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return REGION
         
     elif text == "💰 BALANCE":
-        await update.message.reply_text(f"💰 **Balance:** `{get_user_data(user_id)} Coins`")
+        await update.message.reply_text(
+            f"💰 𝗕𝗔𝗟𝗔𝗡𝗖𝗘 ➜ `{get_user_data(user_id)} Coins`",
+            parse_mode="Markdown"
+        )
         
     elif text == "🎁 REDEEM":
-        await update.message.reply_text("🎁 **Enter your Redeem Code below:**")
+        await update.message.reply_text("🎁 Enter your Redeem Code:")
         return REDEEM_INP
         
     elif text == "👤 OWNER":
-        await update.message.reply_text("👤 **Owner:** @kamod90")
+        await update.message.reply_text("👤 Owner: @kamod90")
         
     elif text == "👥 REFER":
         bot_user = (await context.bot.get_me()).username
-        await update.message.reply_text(f"🔗 **Refer Link:**\n`https://t.me/{bot_user}?start={user_id}`\n\nHar refer par **20 Coins** milenge!")
+        await update.message.reply_text(
+            f"🔗 Refer Link:\nhttps://t.me/{bot_user}?start={user_id}\n\n💎 20 Coins per refer!"
+        )
+        
+        
+async def region_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-# --- GENERATION LOGIC ---
-async def fetch_acc(params):
-    loop = asyncio.get_event_loop()
-    try:
-        r = await loop.run_in_executor(None, lambda: requests.get(API_URL, params=params, timeout=15))
-        return r.json() if r.status_code == 200 else None
-    except: return None
+    region = query.data.split("_")[1]
+    context.user_data['region'] = region
 
-async def get_region(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['region'] = update.message.text
-    await update.message.reply_text("👤 **Name?**")
-    return NAME
+    await query.message.edit_text(
+        f"""
+╔══════════════════════╗
+   🌍 REGION SELECTED
+╚══════════════════════╝
 
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['name'] = update.message.text
-    await update.message.reply_text("🔢 ** accounts count?**\n💳 **Cost:** `1 Coin = 1 Account`")
-    return COUNT
+✅ {region}
+
+👤 Enter Name:
+"""
+    )
+
+    return NAME        
+
+
 
 async def get_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        count_str = update.message.text
-        if not count_str.isdigit():
-            await update.message.reply_text("❌ Please enter a number!")
-            return COUNT
+    count_str = update.message.text
+    if not count_str.isdigit():
+        await update.message.reply_text("❌ Enter valid number!")
+        return COUNT
 
-        count = int(count_str)
-        user_id = update.effective_user.id
-        balance = get_user_data(user_id)
+    count = int(count_str)
+    user_id = update.effective_user.id
+    balance = get_user_data(user_id)
 
-        if count <= 0:
-            await update.message.reply_text("❌ Enter valid number!")
-            return COUNT
+    if count <= 0:
+        await update.message.reply_text("❌ Invalid number!")
+        return COUNT
 
-        if count > balance:
-            await update.message.reply_text("❌ Low Balance!")
-            return ConversationHandler.END
+    if count > balance:
+        await update.message.reply_text("❌ Low Balance!")
+        return ConversationHandler.END
 
-        msg = await update.message.reply_text(f"🚀 Starting... 0/{count}")
-        params = {
-            'name': context.user_data['name'],
-            'count': 1,
-            'region': context.user_data['region']
-        }
+    msg = await update.message.reply_text(
+f"""
+╔══════════════════════╗
+   🚀 PREMIUM GENERATOR
+╚══════════════════════╝
 
-        final_accs = []
+👤 NAME ➜ {context.user_data['name']}
+🌍 REGION ➜ {context.user_data['region']}
+📦 COUNT ➜ {count}
 
-        for i in range(1, count + 1):
-            res = await fetch_acc(params)
-            if res:
-                final_accs.append(res)
+━━━━━━━━━━━━━━━━━━━━━━
+⚡ STARTING...
+━━━━━━━━━━━━━━━━━━━━━━
+"""
+    )
 
-            try:
-                await msg.edit_text(f"🚀 Generating: {i}/{count} Accounts...")
-            except:
-                pass
+    params = {
+        'name': context.user_data['name'],
+        'count': 1,
+        'region': context.user_data['region']
+    }
 
-            if i < count:
-                await asyncio.sleep(0.2)
+    final_accs = []
 
-        update_balance(user_id, -count)
-
-        f_io = io.BytesIO(json.dumps(final_accs, indent=4).encode())
-        f_io.name = f"accounts_{user_id}.json"
+    for i in range(1, count + 1):
+        res = await fetch_acc(params)
+        if res:
+            final_accs.append(res)
 
         try:
-            await msg.delete()
+            await msg.edit_text(f"🚀 Generating: {i}/{count}")
         except:
             pass
 
-        await update.message.reply_document(
-            document=f_io,
-            caption=f"✅ Success! {len(final_accs)} Accounts Generated."
-        )
+        if i < count:
+            await asyncio.sleep(0.2)
 
-        return ConversationHandler.END
+    update_balance(user_id, -count)
 
-    except Exception as e:
-        print(f"Error in get_count: {e}")
-        return ConversationHandler.END
+    f_io = io.BytesIO(json.dumps(final_accs, indent=4).encode())
+    f_io.name = f"accounts_{user_id}.json"
+
+    await msg.delete()
+
+    await update.message.reply_document(
+        document=f_io,
+        caption=f"""
+╔══════════════════════╗
+   ✅ GENERATION COMPLETE
+╚══════════════════════╝
+
+📦 ACCOUNTS ➜ {len(final_accs)}
+💰 BALANCE ➜ {get_user_data(user_id)} Coins
+"""
+    )
+
+    return ConversationHandler.END
 
 async def handle_redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return ConversationHandler.END
@@ -300,35 +385,40 @@ async def admin_redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: await update.message.reply_text("Usage: `/redeem CODE VALUE LIMIT`")
 
 async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Sabhi anjane errors ko catch karne ke liye
     print(f"Update {update} caused error {context.error}")
+
 
 def main():
     init_db()
     app = Application.builder().token(TOKEN).build()
     
     conv = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('^(🔥 GENERATE ACCOUNTS|🎁 REDEEM)$'), handle_buttons)],
+        entry_points=[
+            MessageHandler(filters.Regex('^(🔥 GENERATE ACCOUNTS|🎁 REDEEM)$'), handle_buttons)
+        ],
         states={
-            REGION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_region)],
+            REGION: [CallbackQueryHandler(region_button, pattern="reg_")],
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_count)],
             REDEEM_INP: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_redeem)],
         },
         fallbacks=[CommandHandler('start', start)],
-        allow_reentry=True # Ise True rakhne se user bich mein start kar sakta hai
+        allow_reentry=True
     )
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("redeem", admin_redeem))
     app.add_handler(CallbackQueryHandler(verify_join, pattern="verify_join"))
     app.add_handler(conv)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
-    
+
+    # ❌ IMPORTANT: Ye line remove kar di gayi
+    # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
+
     app.add_error_handler(global_error_handler)
     
     print("Bot is LIVE...")
     app.run_polling()
+
 
 if __name__ == '__main__':
     main()
