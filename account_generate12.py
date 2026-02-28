@@ -327,6 +327,50 @@ f"""
     )
 
     return ConversationHandler.END
+    
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /broadcast message")
+        return
+
+    message = " ".join(context.args)
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM users")
+    users = c.fetchall()
+    conn.close()
+
+    sent = 0
+    failed = 0
+
+    for user in users:
+        try:
+            await context.bot.send_message(
+                chat_id=user[0],
+                text=f"""
+╔══════════════════════╗
+     📢 𝗕𝗢𝗧 𝗨𝗣𝗗𝗔𝗧𝗘
+╚══════════════════════╝
+
+{message}
+
+━━━━━━━━━━━━━━━━━━━━━━
+🔥 KAMOD GENERATOR
+━━━━━━━━━━━━━━━━━━━━━━
+"""
+            )
+            sent += 1
+            await asyncio.sleep(0.05)  # Anti flood
+        except:
+            failed += 1
+
+    await update.message.reply_text(
+        f"✅ Broadcast Complete\n\n👥 Sent: {sent}\n❌ Failed: {failed}"
+    )    
 
 async def handle_redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return ConversationHandler.END
@@ -408,6 +452,7 @@ def main():
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("redeem", admin_redeem))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(verify_join, pattern="verify_join"))
     app.add_handler(conv)
 
