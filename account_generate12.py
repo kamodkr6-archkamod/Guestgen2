@@ -251,6 +251,26 @@ async def region_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NAME        
 
 
+async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['name'] = update.message.text.strip()
+
+    await update.message.reply_text(
+        "📦 Enter Number of Accounts:"
+    )
+
+    return COUNT
+    
+import aiohttp
+
+async def fetch_acc(params):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(API_URL, params=params, timeout=20) as response:
+                if response.status == 200:
+                    return await response.json()
+    except:
+        return None
+
 
 async def get_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count_str = update.message.text
